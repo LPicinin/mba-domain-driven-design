@@ -17,6 +17,9 @@ import { EventMysqlRepository } from '../infra/db/repositories/event-mysql.repos
 import { OrderService } from './order.service';
 import { OrderMysqlRepository } from '../infra/db/repositories/order-mysql.repository';
 import { SpotReservationMysqlRepository } from '../infra/db/repositories/spot-reservation-mysql.repository';
+import { ApplicationService } from '../../common/application/application.service';
+import { DomainEventManager } from '../../common/domain/domain-event-manager';
+import { PaymentGateway } from './payment.gateway';
 
 test('deve criar uma order', async () => {
   const orm = await MikroORM.init<MySqlDriver>({
@@ -31,7 +34,7 @@ test('deve criar uma order', async () => {
     ],
     dbName: 'events',
     host: 'localhost',
-    port: 3306,
+    port: 3307,
     user: 'root',
     password: 'root',
     type: 'mysql',
@@ -76,12 +79,19 @@ test('deve criar uma order', async () => {
 
   const orderRepo = new OrderMysqlRepository(em);
   const spotReservationRepo = new SpotReservationMysqlRepository(em);
+  const domainEventManager = new DomainEventManager();
+  const applicationService = new ApplicationService(
+    unitOfWork,
+    domainEventManager,
+  );
   const orderService = new OrderService(
     orderRepo,
     customerRepo,
     eventRepo,
     spotReservationRepo,
     unitOfWork,
+    new PaymentGateway(),
+    applicationService,
   );
 
   const op1 = orderService.create({
@@ -89,6 +99,7 @@ test('deve criar uma order', async () => {
     section_id: event.sections[0].id.value,
     customer_id: customer.id.value,
     spot_id: event.sections[0].spots[0].id.value,
+    card_token: 'tok_visa',
   });
 
   const op2 = orderService.create({
@@ -96,6 +107,7 @@ test('deve criar uma order', async () => {
     section_id: event.sections[0].id.value,
     customer_id: customer.id.value,
     spot_id: event.sections[0].spots[0].id.value,
+    card_token: 'tok_visa',
   });
 
   try {

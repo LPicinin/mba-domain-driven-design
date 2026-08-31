@@ -76,6 +76,7 @@ export class Order extends AggregateRoot {
     return {
       id: this.id.value,
       amount: this.amount,
+      status: OrderStatus[this.status],
       customer_id: this.customer_id.value,
       event_spot_id: this.event_spot_id.value,
     };

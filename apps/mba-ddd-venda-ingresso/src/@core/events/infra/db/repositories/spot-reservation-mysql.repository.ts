@@ -22,10 +22,6 @@ export class SpotReservationMysqlRepository
     return this.entityManager.find(SpotReservation, {});
   }
 
-  async findBySpotId(spotId: EventSpotId): Promise<SpotReservation | null> {
-    return this.entityManager.findOne(SpotReservation, { spot_id: spotId });
-  }
-
   async delete(entity: SpotReservation): Promise<void> {
     await this.entityManager.remove(entity);
   }

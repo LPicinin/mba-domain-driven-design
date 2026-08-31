@@ -1,5 +1,6 @@
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, Type } from '@nestjs/common';
+import { IDomainEventHandler } from '../@core/common/application/domain-event-handler.interface';
 import {
   CustomerSchema,
   EventSchema,
@@ -46,6 +47,7 @@ import { EventSpotReleasedHandler } from '../@core/events/application/handlers/e
 import { IEventRepository } from '../@core/events/domain/repositories/event-repository.interface';
 import { ISpotReservationRepository } from '../@core/events/domain/repositories/spot-reservation-repository.interface';
 import { IWaitingListRepository } from '../@core/events/domain/repositories/waiting-list-repository.interface';
+import { SpotOfferedToWaitingCustomer } from '../@core/events/domain/events/domain-events/spot-offered-to-waiting-customer.event';
 import { SpotOfferedToWaitingCustomerIntegrationEvent } from '../@core/events/domain/events/integration-events/spot-offered-to-waiting-customer.int-events';
 import { WaitingListService } from '../@core/events/application/waiting-list.service';
 
@@ -178,19 +180,9 @@ import { WaitingListService } from '../@core/events/application/waiting-list.ser
       provide: EventSpotReleasedHandler,
       useFactory: (
         waitingListRepo: IWaitingListRepository,
-        eventRepo: IEventRepository,
         domainEventManager: DomainEventManager,
-      ) =>
-        new EventSpotReleasedHandler(
-          waitingListRepo,
-          eventRepo,
-          domainEventManager,
-        ),
-      inject: [
-        'IWaitingListRepository',
-        'IEventRepository',
-        DomainEventManager,
-      ],
+      ) => new EventSpotReleasedHandler(waitingListRepo, domainEventManager),
+      inject: ['IWaitingListRepository', DomainEventManager],
     },
     {
       provide: WaitingListService,
@@ -229,14 +221,11 @@ export class EventsModule implements OnModuleInit {
 
   onModuleInit() {
     console.log('EventsModule initialized');
-    MyHandlerHandler.listensTo().forEach((eventName: string) => {
-      this.domainEventManager.register(eventName, async (event) => {
-        const handler: MyHandlerHandler = await this.moduleRef.resolve(
-          MyHandlerHandler,
-        );
-        await handler.handle(event);
-      });
-    });
+
+    this.registerHandler(MyHandlerHandler);
+    this.registerHandler(OrderCancelledHandler);
+    this.registerHandler(EventSpotReleasedHandler);
+
     this.domainEventManager.registerForIntegrationEvent(
       PartnerCreated.name,
       async (event) => {
@@ -246,32 +235,26 @@ export class EventsModule implements OnModuleInit {
       },
     );
 
-    // Registros dos novos handlers
-    OrderCancelledHandler.listensTo().forEach((eventName: string) => {
-      this.domainEventManager.register(eventName, async (event) => {
-        const handler: OrderCancelledHandler = await this.moduleRef.resolve(
-          OrderCancelledHandler,
-        );
-        await handler.handle(event);
-      });
-    });
-
-    EventSpotReleasedHandler.listensTo().forEach((eventName: string) => {
-      this.domainEventManager.register(eventName, async (event) => {
-        const handler: EventSpotReleasedHandler = await this.moduleRef.resolve(
-          EventSpotReleasedHandler,
-        );
-        await handler.handle(event);
-      });
-    });
-
+    // O DomainEventManager emite pelo nome do evento de DOMÍNIO; o nome da
+    // classe do evento de integração é apenas a routing key no RabbitMQ.
     this.domainEventManager.registerForIntegrationEvent(
-      SpotOfferedToWaitingCustomerIntegrationEvent.name,
+      SpotOfferedToWaitingCustomer.name,
       async (domainEvent) => {
         const integrationEvent =
           new SpotOfferedToWaitingCustomerIntegrationEvent(domainEvent);
         await this.integrationEventsQueue.add(integrationEvent);
       },
     );
+  }
+
+  private registerHandler(
+    handlerClass: Type<IDomainEventHandler> & { listensTo(): string[] },
+  ) {
+    handlerClass.listensTo().forEach((eventName: string) => {
+      this.domainEventManager.register(eventName, async (event) => {
+        const handler = await this.moduleRef.resolve(handlerClass);
+        await handler.handle(event);
+      });
+    });
   }
 }

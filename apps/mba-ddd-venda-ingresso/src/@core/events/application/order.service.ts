@@ -9,7 +9,6 @@ import { IOrderRepository } from '../domain/repositories/order-repository.interf
 import { ISpotReservationRepository } from '../domain/repositories/spot-reservation-repository.interface';
 import { PaymentGateway } from './payment.gateway';
 import { ApplicationService } from '../../common/application/application.service';
-import { OrderId } from '../domain/entities/order.entity';
 
 export class OrderService {
   constructor(
@@ -105,16 +104,19 @@ export class OrderService {
     });
   }
 
-  async cancel(orderId: string) {
-    if (!this.applicationService) {
-      throw new Error('ApplicationService not configured');
-    }
+  async cancel(order_id: string) {
     return this.applicationService.run(async () => {
-      const order = await this.orderRepo.findById(orderId);
+      const order = await this.orderRepo.findById(order_id);
+
       if (!order) {
         throw new Error('Order not found');
       }
+
       order.cancel();
+
+      // O agregado precisa entrar no Unit of Work mesmo vindo do banco: é o
+      // add() que o coloca na lista que o ApplicationService percorre para
+      // publicar os eventos de domínio.
       await this.orderRepo.add(order);
       return order;
     });

@@ -7,6 +7,8 @@ import {
   OrderSchema,
   PartnerSchema,
   SpotReservationSchema,
+  WaitingListEntrySchema,
+  WaitingListSchema,
 } from '../../../infra/db/schemas';
 
 export function initOrm() {
@@ -22,6 +24,8 @@ export function initOrm() {
           EventSpotSchema,
           OrderSchema,
           SpotReservationSchema,
+          WaitingListSchema,
+          WaitingListEntrySchema,
         ],
         type: 'mysql',
         dbName: 'fake',

@@ -21,12 +21,23 @@ export class ConsumerService {
   @RabbitSubscribe({
     exchange: 'amq.direct',
     routingKey: 'SpotOfferedToWaitingCustomerIntegrationEvent',
-    queue: 'emails',
+    queue: 'emails-spot-offered',
   })
-  handleSpotOffered(msg: { payload: any }) {
-    const p = msg.payload;
-    console.log(
-      `Nova vaga! Notificando cliente ${p.customer_id} para seção ${p.section_id} (spot ${p.spot_id})`,
-    );
+  handleSpotOffered(msg: {
+    event_name: string;
+    payload: {
+      customer_id: string;
+      event_id: string;
+      section_id: string;
+      spot_id: string;
+    };
+  }) {
+    console.log('ConsumerService.handleSpotOffered', {
+      email: 'abriu uma vaga na seção em que você está na lista de espera',
+      customer_id: msg.payload.customer_id,
+      event_id: msg.payload.event_id,
+      section_id: msg.payload.section_id,
+      spot_id: msg.payload.spot_id,
+    });
   }
 }
