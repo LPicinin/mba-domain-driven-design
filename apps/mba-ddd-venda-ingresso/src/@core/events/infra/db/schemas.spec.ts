@@ -7,7 +7,7 @@ test('deve criar um partner', async () => {
     entities: [PartnerSchema],
     dbName: 'events',
     host: 'localhost',
-    port: 3306,
+    port: 3307,
     user: 'root',
     password: 'root',
     type: 'mysql',

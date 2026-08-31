@@ -5,24 +5,24 @@ import { WaitingListService } from '../../@core/events/application/waiting-list.
 export class WaitingListController {
   constructor(private waitingListService: WaitingListService) {}
 
+  @Get()
+  list(
+    @Param('event_id') event_id: string,
+    @Param('section_id') section_id: string,
+  ) {
+    return this.waitingListService.list(event_id, section_id);
+  }
+
   @Post()
-  async join(
+  join(
     @Param('event_id') event_id: string,
     @Param('section_id') section_id: string,
     @Body() body: { customer_id: string },
   ) {
-    return this.waitingListService.joinWaitingList({
+    return this.waitingListService.join({
       event_id,
       section_id,
       customer_id: body.customer_id,
     });
-  }
-
-  @Get()
-  async list(
-    @Param('event_id') event_id: string,
-    @Param('section_id') section_id: string,
-  ) {
-    return this.waitingListService.listWaitingList(event_id, section_id);
   }
 }

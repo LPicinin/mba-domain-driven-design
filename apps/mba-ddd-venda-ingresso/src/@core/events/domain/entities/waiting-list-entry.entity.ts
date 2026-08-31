@@ -1,4 +1,4 @@
-import { AggregateRoot } from '../../../common/domain/aggregate-root';
+import { Entity } from '../../../common/domain/entity';
 import Uuid from '../../../common/domain/value-objects/uuid.vo';
 import { CustomerId } from './customer.entity';
 
@@ -9,20 +9,25 @@ export enum WaitingListEntryStatus {
   NOTIFIED = 'NOTIFIED',
 }
 
-export type WaitingListEntryConstructorProps = {
-  id?: WaitingListEntryId | string;
+export type WaitingListEntryCreateCommand = {
   customer_id: CustomerId;
-  status?: WaitingListEntryStatus;
+  position: number;
 };
 
-export type WaitingListEntryProps = WaitingListEntryConstructorProps; // alias for constructor
+export type WaitingListEntryConstructorProps = {
+  id?: WaitingListEntryId | string;
+  customer_id: CustomerId | string;
+  position: number;
+  status: WaitingListEntryStatus;
+};
 
-export class WaitingListEntry extends AggregateRoot {
+export class WaitingListEntry extends Entity {
   id: WaitingListEntryId;
   customer_id: CustomerId;
-  status: WaitingListEntryStatus = WaitingListEntryStatus.PENDING;
+  position: number;
+  status: WaitingListEntryStatus;
 
-  constructor(props: WaitingListEntryProps) {
+  constructor(props: WaitingListEntryConstructorProps) {
     super();
     this.id =
       typeof props.id === 'string'
@@ -32,18 +37,22 @@ export class WaitingListEntry extends AggregateRoot {
       props.customer_id instanceof CustomerId
         ? props.customer_id
         : new CustomerId(props.customer_id);
-    this.status = props.status ?? WaitingListEntryStatus.PENDING;
+    this.position = props.position;
+    this.status = props.status;
   }
 
-  static create(props: WaitingListEntryConstructorProps) {
-    const entry = new WaitingListEntry(props);
-    return entry;
+  static create(command: WaitingListEntryCreateCommand) {
+    return new WaitingListEntry({
+      ...command,
+      status: WaitingListEntryStatus.PENDING,
+    });
+  }
+
+  get is_pending() {
+    return this.status === WaitingListEntryStatus.PENDING;
   }
 
   notify() {
-    if (this.status === WaitingListEntryStatus.NOTIFIED) {
-      return;
-    }
     this.status = WaitingListEntryStatus.NOTIFIED;
   }
 
@@ -51,6 +60,7 @@ export class WaitingListEntry extends AggregateRoot {
     return {
       id: this.id.value,
       customer_id: this.customer_id.value,
+      position: this.position,
       status: this.status,
     };
   }

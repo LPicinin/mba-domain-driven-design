@@ -2,12 +2,10 @@ import { IDomainEventHandler } from '../../../common/application/domain-event-ha
 import { DomainEventManager } from '../../../common/domain/domain-event-manager';
 import { EventSpotReleased } from '../../domain/events/domain-events/event-spot-released.event';
 import { IWaitingListRepository } from '../../domain/repositories/waiting-list-repository.interface';
-import { IEventRepository } from '../../domain/repositories/event-repository.interface';
 
 export class EventSpotReleasedHandler implements IDomainEventHandler {
   constructor(
     private waitingListRepo: IWaitingListRepository,
-    private eventRepo: IEventRepository,
     private domainEventManager: DomainEventManager,
   ) {}
 
@@ -17,13 +15,16 @@ export class EventSpotReleasedHandler implements IDomainEventHandler {
       event.section_id,
     );
 
+    // Seção sem fila: a reação termina sem efeito e sem erro.
     if (!waitingList) {
-      return; // sem fila, nada a fazer
+      return;
     }
 
-    const integrationEventOrNull = waitingList.offerSpotToNext(event.spot_id);
-    if (!integrationEventOrNull) {
-      return; // sem entradas pendentes
+    const notifiedEntry = waitingList.offerSpotToNext(event.spot_id);
+
+    // Fila sem entradas pendentes: nada a notificar.
+    if (!notifiedEntry) {
+      return;
     }
 
     await this.waitingListRepo.add(waitingList);

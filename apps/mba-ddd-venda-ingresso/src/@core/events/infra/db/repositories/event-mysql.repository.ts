@@ -21,26 +21,19 @@ export class EventMysqlRepository implements IEventRepository {
   }
 
   async findByEventSpotId(spotId: EventSpotId): Promise<Event | null> {
-    const events = await this.entityManager.find(
-      Event,
-      {},
-      { populate: ['sections'] },
-    );
-    for (const ev of events) {
-      const sections = (ev.sections as any).getItems
-        ? (ev.sections as any).getItems()
-        : ev.sections;
-      for (const section of sections) {
-        await section.spots.init(); // ensure populated
-        const spots = section.spots.getItems
-          ? section.spots.getItems()
-          : section.spots;
-        if (spots.some((s: any) => s.id.equals(spotId))) {
-          return ev;
-        }
-      }
-    }
-    return null;
+    // Busca apenas o id do evento dono do spot, atravessando seções e lugares.
+    // O agregado é recarregado inteiro por findById para não vir com as
+    // coleções filtradas pelo join.
+    const [row] = await this.entityManager
+      .createQueryBuilder(Event, 'e')
+      .select('e.id')
+      .join('e.sections', 's')
+      .join('s.spots', 'sp')
+      .where({ 'sp.id': spotId })
+      .limit(1)
+      .execute<{ id: string }[]>();
+
+    return row ? this.findById(row.id) : null;
   }
 
   async delete(entity: Event): Promise<void> {

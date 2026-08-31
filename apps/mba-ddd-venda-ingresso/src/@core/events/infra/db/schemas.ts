@@ -15,7 +15,10 @@ import { Order, OrderStatus } from '../../domain/entities/order.entity';
 import { OrderIdSchemaType } from './types/order-id.schema-type';
 import { WaitingList } from '../../domain/entities/waiting-list.entity';
 import { WaitingListIdSchemaType } from './types/waiting-list-id.schema-type';
-import { WaitingListEntry } from '../../domain/entities/waiting-list-entry.entity';
+import {
+  WaitingListEntry,
+  WaitingListEntryStatus,
+} from '../../domain/entities/waiting-list-entry.entity';
 import { WaitingListEntryIdSchemaType } from './types/waiting-list-entry-id.schema-type';
 
 export const PartnerSchema = new EntitySchema<Partner>({
@@ -172,27 +175,35 @@ export const OrderSchema = new EntitySchema<Order>({
 
 export const WaitingListSchema = new EntitySchema<WaitingList>({
   class: WaitingList,
+  uniques: [{ properties: ['event_id', 'section_id'] }],
   properties: {
     id: {
       customType: new WaitingListIdSchemaType(),
       primary: true,
     },
-    event_id: {
-      customType: new EventIdSchemaType(),
-      reference: 'm:1',
-      entity: () => Event,
-    },
-    section_id: {
-      customType: new EventSectionIdSchemaType(),
-      reference: 'm:1',
-      entity: () => EventSection,
-    },
     entries: {
       reference: '1:m',
       entity: () => WaitingListEntry,
       mappedBy: (entry) => entry.waiting_list_id,
+      orderBy: { position: 'asc' },
       eager: true,
       cascade: [Cascade.ALL],
+    },
+    event_id: {
+      reference: 'm:1',
+      entity: () => Event,
+      hidden: true,
+      mapToPk: true,
+      inherited: true,
+      customType: new EventIdSchemaType(),
+    },
+    section_id: {
+      reference: 'm:1',
+      entity: () => EventSection,
+      hidden: true,
+      mapToPk: true,
+      inherited: true,
+      customType: new EventSectionIdSchemaType(),
     },
   },
 });
@@ -204,12 +215,16 @@ export const WaitingListEntrySchema = new EntitySchema<WaitingListEntry>({
       customType: new WaitingListEntryIdSchemaType(),
       primary: true,
     },
+    position: { type: 'number' },
+    status: { enum: true, items: () => WaitingListEntryStatus },
     customer_id: {
-      customType: new CustomerIdSchemaType(),
       reference: 'm:1',
       entity: () => Customer,
+      hidden: true,
+      mapToPk: true,
+      inherited: true,
+      customType: new CustomerIdSchemaType(),
     },
-    status: { type: 'string' },
     waiting_list_id: {
       reference: 'm:1',
       entity: () => WaitingList,

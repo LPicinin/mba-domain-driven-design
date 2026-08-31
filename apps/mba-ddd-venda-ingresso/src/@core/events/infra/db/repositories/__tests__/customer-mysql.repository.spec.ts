@@ -8,7 +8,7 @@ test('Customer repository', async () => {
     entities: [CustomerSchema],
     dbName: 'events',
     host: 'localhost',
-    port: 3306,
+    port: 3307,
     user: 'root',
     password: 'root',
     type: 'mysql',

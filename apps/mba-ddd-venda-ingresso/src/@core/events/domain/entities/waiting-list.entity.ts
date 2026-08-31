@@ -1,32 +1,36 @@
 import { AggregateRoot } from '../../../common/domain/aggregate-root';
+import {
+  AnyCollection,
+  ICollection,
+  MyCollectionFactory,
+} from '../../../common/domain/my-collection';
 import Uuid from '../../../common/domain/value-objects/uuid.vo';
+import { CustomerJoinedWaitingList } from '../events/domain-events/customer-joined-waiting-list.event';
+import { SpotOfferedToWaitingCustomer } from '../events/domain-events/spot-offered-to-waiting-customer.event';
 import { CustomerId } from './customer.entity';
-import { EventId } from './event.entity';
 import { EventSectionId } from './event-section';
 import { EventSpotId } from './event-spot';
-import {
-  WaitingListEntry,
-  WaitingListEntryId,
-  WaitingListEntryStatus,
-  WaitingListEntryConstructorProps,
-} from './waiting-list-entry.entity';
-import { SpotOfferedToWaitingCustomer } from '../events/domain-events/spot-offered-to-waiting-customer.event';
-import { CustomerJoinedWaitingList } from '../events/domain-events/customer-joined-waiting-list.event';
+import { EventId } from './event.entity';
+import { WaitingListEntry } from './waiting-list-entry.entity';
 
 export class WaitingListId extends Uuid {}
 
-export type WaitingListConstructorProps = {
-  id?: WaitingListId | string;
+export type CreateWaitingListCommand = {
   event_id: EventId;
   section_id: EventSectionId;
-  entries?: WaitingListEntry[];
+};
+
+export type WaitingListConstructorProps = {
+  id?: WaitingListId | string;
+  event_id: EventId | string;
+  section_id: EventSectionId | string;
 };
 
 export class WaitingList extends AggregateRoot {
   id: WaitingListId;
   event_id: EventId;
   section_id: EventSectionId;
-  private _entries: WaitingListEntry[] = [];
+  private _entries: ICollection<WaitingListEntry>;
 
   constructor(props: WaitingListConstructorProps) {
     super();
@@ -42,60 +46,76 @@ export class WaitingList extends AggregateRoot {
       props.section_id instanceof EventSectionId
         ? props.section_id
         : new EventSectionId(props.section_id);
-    if (props.entries) {
-      this._entries = props.entries;
-    }
+    this._entries = MyCollectionFactory.create<WaitingListEntry>(this);
   }
 
-  static create(props: WaitingListConstructorProps) {
-    const wl = new WaitingList(props);
-    return wl;
+  static create(command: CreateWaitingListCommand) {
+    return new WaitingList(command);
   }
 
   addEntry(customer_id: CustomerId) {
-    const hasPending = this._entries.some(
-      (e) =>
-        e.customer_id.equals(customer_id) &&
-        e.status === WaitingListEntryStatus.PENDING,
+    const alreadyWaiting = this.entries.find(
+      (entry) => entry.is_pending && entry.customer_id.equals(customer_id),
     );
-    if (hasPending) {
+
+    if (alreadyWaiting) {
       throw new Error('Customer already in waiting list');
     }
-    const entry = WaitingListEntry.create({ customer_id });
-    this._entries.push(entry);
+
+    const entry = WaitingListEntry.create({
+      customer_id,
+      position: this.next_position,
+    });
+    this.entries.add(entry);
     this.addEvent(
       new CustomerJoinedWaitingList(
         this.id,
-        customer_id,
         this.event_id,
         this.section_id,
+        entry.customer_id,
+        entry.position,
       ),
     );
+    return entry;
   }
 
-  offerSpotToNext(spot_id: EventSpotId): SpotOfferedToWaitingCustomer | null {
-    const pendingEntry = this._entries.find(
-      (e) => e.status === WaitingListEntryStatus.PENDING,
-    );
-    if (!pendingEntry) {
+  offerSpotToNext(spot_id: EventSpotId) {
+    const nextEntry = this.entries_by_arrival.find((entry) => entry.is_pending);
+
+    if (!nextEntry) {
       return null;
     }
-    pendingEntry.notify();
-    const event = new SpotOfferedToWaitingCustomer(
-      this.id,
-      pendingEntry.customer_id,
-      this.event_id,
-      this.section_id,
-      spot_id,
+
+    nextEntry.notify();
+    this.addEvent(
+      new SpotOfferedToWaitingCustomer(
+        this.id,
+        nextEntry.customer_id,
+        this.event_id,
+        this.section_id,
+        spot_id,
+      ),
     );
-    this.addEvent(event);
-    return event;
+    return nextEntry;
   }
 
-  get entries(): WaitingListEntry[] {
-    return [...this._entries].sort((a, b) =>
-      a.id.value.localeCompare(b.id.value),
-    ); // simple order by arrival via id
+  get entries_by_arrival(): WaitingListEntry[] {
+    return [...this.entries.values()].sort((a, b) => a.position - b.position);
+  }
+
+  private get next_position(): number {
+    const highest = this.entries
+      .values()
+      .reduce((max, entry) => (entry.position > max ? entry.position : max), 0);
+    return highest + 1;
+  }
+
+  get entries(): ICollection<WaitingListEntry> {
+    return this._entries as ICollection<WaitingListEntry>;
+  }
+
+  set entries(entries: AnyCollection<WaitingListEntry>) {
+    this._entries = MyCollectionFactory.createFrom<WaitingListEntry>(entries);
   }
 
   toJSON() {
@@ -103,7 +123,7 @@ export class WaitingList extends AggregateRoot {
       id: this.id.value,
       event_id: this.event_id.value,
       section_id: this.section_id.value,
-      entries: this.entries.map((e) => e.toJSON()),
+      entries: this.entries_by_arrival.map((entry) => entry.toJSON()),
     };
   }
 }

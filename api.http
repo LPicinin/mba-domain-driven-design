@@ -1,3 +1,8 @@
+### Roteiro do projeto.
+### A partir do bloco "Lista de espera" ele reproduz o fluxo da feature:
+### comprar o unico lugar da secao (esgota) -> entrar na fila -> cancelar o
+### pedido -> o lugar volta a ficar disponivel e o primeiro da fila e notificado.
+
 ###
 GET http://localhost:3000
 
@@ -18,7 +23,7 @@ Content-Type: application/json
 ###
 GET http://localhost:3000/customers
 
-###
+### Cliente A - o que compra o ingresso
 POST http://localhost:3000/customers
 Content-Type: application/json
 
@@ -29,6 +34,18 @@ Content-Type: application/json
 
 ###
 @customer_id = 61f0ff6e-0bb1-4635-8899-4b88ce46975b
+
+### Cliente B - o que entra na lista de espera
+POST http://localhost:3000/customers
+Content-Type: application/json
+
+{
+    "name": "Customer 2",
+    "cpf": "993.464.130-50"
+}
+
+###
+@customer_id_b = 00000000-0000-0000-0000-000000000002
 
 ###
 GET http://localhost:3000/events
@@ -50,7 +67,7 @@ Content-Type: application/json
 ###
 GET http://localhost:3000/events/{{event_id}}/sections
 
-###
+### Secao com um unico lugar, para esgotar com uma compra
 POST http://localhost:3000/events/{{event_id}}/sections
 Content-Type: application/json
 
@@ -80,7 +97,10 @@ Content-Type: application/json
 GET http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/spots
 
 ###
-PUT http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/spots/2179f4e2-b3bc-4be9-b55d-f0876f24987d
+@spot_id = 96298e63-5a38-4352-b97d-322259f10921
+
+###
+PUT http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/spots/{{spot_id}}
 Content-Type: application/json
 
 {
@@ -90,34 +110,39 @@ Content-Type: application/json
 ###
 GET http://localhost:3000/events/{{event_id}}/orders
 
-###
+### Cliente A compra o unico lugar: a secao esgota
 POST http://localhost:3000/events/{{event_id}}/orders
 Content-Type: application/json
 
 {
     "customer_id": "{{customer_id}}",
     "section_id": "{{section_id}}",
-    "spot_id": "96298e63-5a38-4352-b97d-322259f10921",
+    "spot_id": "{{spot_id}}",
     "card_token": "tok_visa"
 }
 
 ###
 @order_id = 00000000-0000-0000-0000-000000000001
 
-###
-POST http://localhost:3000/orders/{{order_id}}/cancel
-Content-Type: application/json
-
-{
-}
-
-###
+### Lista de espera - cliente B entra na fila da secao esgotada
 POST http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/waiting-list
 Content-Type: application/json
 
 {
-  "customer_id": "{{customer_id}}"
+    "customer_id": "{{customer_id_b}}"
 }
 
-###
+### Lista de espera - consultar a fila (entrada PENDING, na ordem de chegada)
+GET http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/waiting-list
+
+### Cancelamento do pedido do cliente A
+### Um unico POST dispara toda a cadeia:
+### OrderCancelled -> EventSpotReleased -> SpotOfferedToWaitingCustomer ->
+### SpotOfferedToWaitingCustomerIntegrationEvent -> RabbitMQ -> apps/emails
+POST http://localhost:3000/events/{{event_id}}/orders/{{order_id}}/cancel
+
+### Consequencia 1 - o lugar voltou a ficar disponivel (is_reserved = false)
+GET http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/spots
+
+### Consequencia 2 - a entrada do cliente B esta NOTIFIED
 GET http://localhost:3000/events/{{event_id}}/sections/{{section_id}}/waiting-list

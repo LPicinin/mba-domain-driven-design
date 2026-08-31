@@ -140,15 +140,18 @@ export class EventSection extends Entity {
     if (!spot) {
       throw new Error('Spot not found');
     }
-    if (!spot.is_reserved) {
-      throw new Error('Spot is not reserved');
-    }
     spot.markAsAvailable();
   }
 
-  releaseSpot(command: { section_id: EventSectionId; spot_id: EventSpotId }) {
-    // delegate to mark available; section_id already validated by caller
-    this.markSpotAsAvailable(command.spot_id);
+  hasSpot(spot_id: EventSpotId) {
+    return this.spots.find((spot) => spot.id.equals(spot_id)) !== undefined;
+  }
+
+  // A seção está esgotada quando nenhum lugar dela está disponível para
+  // reserva. Deriva da disponibilidade dos próprios lugares, e não do contador
+  // total_spots_reserved, que o fluxo de compra não mantém.
+  isSoldOut() {
+    return !this.spots.find((spot) => this.allowReserveSpot(spot.id));
   }
 
   get spots(): ICollection<EventSpot> {
